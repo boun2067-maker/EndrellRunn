@@ -67,7 +67,7 @@ h1{margin:.2rem 0 0; font-size:28px}
       </p>
       <div style="margin:10px 0 6px; opacity:.95">Chọn kỹ năng chính:</div>
       <div class="skills" id="skillChoices">
-        <div class="skill-opt" data-skill="orb">🔮 Orb bảo vệ<br><small class="small">Quanh người, chạm tiêu diệt (cấp tăng số orb)</small></div>
+        <div class="skill-opt" data-skill="orb">⭕ Orb bảo vệ<br><small class="small">Quanh người, chạm tiêu diệt (cấp tăng số orb)</small></div>
         <div class="skill-opt" data-skill="freeze">❄️ Đóng băng<br><small class="small">Đóng băng quái trong vài giây</small></div>
         <div class="skill-opt" data-skill="explosion">💥 Bùng nổ<br><small class="small">Tiêu diệt nhiều quái xung quanh</small></div>
       </div>
@@ -164,15 +164,15 @@ h1{margin:.2rem 0 0; font-size:28px}
 
   // enemy definitions & behavior states
   const ENEMY_TYPES = {
-    devil: {id:'😈', hp:1, spd:1.0, kind:'chase'},
-    angry: {id:'😡', hp:1, spd:1.5, kind:'chase'},
-    ghost: {id:'👻', hp:1, spd:2.0, kind:'chase'},
-    bot: {id:'🤖', hp:2, spd:0.8, kind:'chase'},
-    clown: {id:'🤡', hp:1, spd:1.0, kind:'clown'}, // throws ball each 5s
+    devil: {id:'😈', hp:1, spd:3.0, kind:'chase'},
+    angry: {id:'😡', hp:1, spd:3.5, kind:'chase'},
+    ghost: {id:'👻', hp:1, spd:4.0, kind:'chase'},
+    bot: {id:'🤖', hp:2, spd:1.0, kind:'chase'},
+    clown: {id:'🤡', hp:1, spd:2.0, kind:'clown'}, // throws ball each 5s
     freezer: {id:'🥶', hp:1, spd:5.0, kind:'freezer'}, // on touch slows player 2s (doesn't kill)
     dummy: {id:'🤪', hp:1, spd:2.0, kind:'dummy'}, // stands, charges if close
-    ninja: {id:'🐱‍👤', hp:1, spd:1.5, kind:'ninja'}, // throws 3 shuriken every 7s
-    alien: {id:'👽', hp:1, spd:1.5, kind:'chase'}
+    ninja: {id:'🐱‍👤', hp:1, spd:2.5, kind:'ninja'}, // throws 3 shuriken every 7s
+    alien: {id:'👽', hp:1, spd:3.5, kind:'chase'}
   };
 
   // boss pool
@@ -880,3 +880,4 @@ h1{margin:.2rem 0 0; font-size:28px}
 </script>
 </body>
 </html>
+
