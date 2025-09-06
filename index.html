@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+<title>Endless Run — Full</title>
+<style>
+:root{
+  --bg:#0b1020; --fg:#e7ecf3; --accent:#74ffd6; --danger:#ff6289; --panel:rgba(255,255,255,0.06);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background: radial-gradient(1200px 800px at 70% -10%, #17223f 0%, #0b1020 60%, #070b16 100%);
+  color:var(--fg); font-family: ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; overflow:hidden;
+}
+#hud{position:fixed; inset:16px auto auto 16px; z-index:20; display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
+.chip{background:var(--panel); border:1px solid rgba(255,255,255,.12); padding:.5rem .75rem; border-radius:999px; backdrop-filter: blur(6px); font-weight:600}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:8px}
+.ok{background:var(--accent)} .bad{background:var(--danger)}
+#area{position:fixed; inset:0; cursor:none;}
+#overlay{position:fixed; inset:0; display:grid; place-items:center; z-index:30; background: linear-gradient(180deg, rgba(7,11,22,.65), rgba(7,11,22,.85)); opacity:0; pointer-events:none; transition:opacity .2s}
+#overlay.show{opacity:1; pointer-events:auto}
+.card{background:rgba(17,24,39,.75); border:1px solid rgba(255,255,255,.08); border-radius:20px; padding:24px; max-width:720px; width:min(94vw,720px); box-shadow:0 10px 40px rgba(0,0,0,.45); text-align:center}
+h1{margin:.2rem 0 0; font-size:28px}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:.8rem 1.1rem;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(180deg,rgba(116,255,214,.22),rgba(116,255,214,.12));color:#061016;font-weight:800;cursor:pointer}
+.skills{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+.skill-opt{cursor:pointer;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.skill-opt.sel{outline:2px solid var(--accent)}
+.kbd{padding:2px 6px;border-radius:6px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);font-weight:700}
+.upgrade-grid{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+.up-card{background:rgba(255,255,255,.03);padding:12px;border-radius:10px;min-width:200px;border:1px solid rgba(255,255,255,.06);text-align:left}
+.small{font-size:12px;opacity:.85}
+.hud-right{position:fixed; right:16px; top:16px; display:flex; gap:10px; flex-direction:column; z-index:25}
+.subskills{display:flex;gap:6px;flex-direction:column}
+.badge{font-size:12px;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.06)}
+.note{font-size:13px;opacity:.9}
+.center-row{display:flex;gap:10px;align-items:center;justify-content:center}
+@media (pointer:coarse){#area{cursor:default}}
+</style>
+</head>
+<body>
+  <div id="hud">
+    <div class="chip"><span class="dot ok"></span><span id="score">Điểm: 0</span></div>
+    <div class="chip"><span class="dot"></span><span id="time">Sống: 0.0s</span></div>
+    <div class="chip"><span class="dot"></span><span id="hi">Kỷ lục: 0</span></div>
+    <div class="chip">🌊 Wave: <span id="wave">0/10</span></div>
+    <div class="chip">XP: <span id="xp">0</span></div>
+    <div class="chip">⚡ Skill (E): <span class="kbd">E</span> <span id="skillStatus">Đang hồi</span></div>
+  </div>
+
+  <div class="hud-right">
+    <div class="badge">Sub Skills (Q/R/T): <span id="subList">—</span></div>
+    <div class="badge">Revives: <span id="revives">0</span></div>
+  </div>
+
+  <canvas id="area"></canvas>
+
+  <div id="overlay" class="show">
+    <div class="card" id="menuCard">
+      <div style="font-size:48px">🖱️🏃‍♂️</div>
+      <h1>Endless Run — Full</h1>
+      <p>
+        Di chuyển chuột/ngón tay để né. Đụng là thua!<br>
+        Mỗi wave 50s — sau wave bạn nhận <b>50 XP</b> và có <b>15s</b> để nâng cấp.<br>
+        Chọn 1 kỹ năng chính (E) trước khi bắt đầu.
+      </p>
+      <div style="margin:10px 0 6px; opacity:.95">Chọn kỹ năng chính:</div>
+      <div class="skills" id="skillChoices">
+        <div class="skill-opt" data-skill="orb">🔮 Orb bảo vệ<br><small class="small">Quanh người, chạm tiêu diệt (cấp tăng số orb)</small></div>
+        <div class="skill-opt" data-skill="freeze">❄️ Đóng băng<br><small class="small">Đóng băng quái trong vài giây</small></div>
+        <div class="skill-opt" data-skill="explosion">💥 Bùng nổ<br><small class="small">Tiêu diệt nhiều quái xung quanh</small></div>
+      </div>
+      <div class="center-row">
+        <button id="startBtn" class="btn" disabled>Bắt đầu</button>
+      </div>
+      <div class="note" style="margin-top:10px">Phím: <span class="kbd">E</span> = skill chính, <span class="kbd">Q</span> / <span class="kbd">R</span> / <span class="kbd">T</span> = sub skills khi mua.</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ---------------- Canvas & helpers ----------------
+  const cvs = document.getElementById('area'), ctx = cvs.getContext('2d');
+  const overlay = document.getElementById('overlay'), menuCard = document.getElementById('menuCard');
+  const startBtn = document.getElementById('startBtn'), choices = document.getElementById('skillChoices');
+  const scoreEl = document.getElementById('score'), timeEl = document.getElementById('time'), hiEl = document.getElementById('hi');
+  const waveEl = document.getElementById('wave'), xpEl = document.getElementById('xp'), skillStatusEl = document.getElementById('skillStatus');
+  const subListEl = document.getElementById('subList'), revivesEl = document.getElementById('revives');
+
+  let W=0,H=0; function resize(){W=cvs.width=innerWidth; H=cvs.height=innerHeight;} addEventListener('resize',resize); resize();
+
+  function rand(a,b){return a + Math.random()*(b-a);}
+  function chooseWeighted(list){ // [{item, w}, ...]
+    const s = list.reduce((acc,x)=>acc+x.w,0);
+    let r=Math.random()*s; for(const it of list){ if(r<it.w) return it.item; r-=it.w; } return list[0].item;
+  }
+
+  // ---------------- Audio (simple procedural) ----------------
+  const SND = (()=>{
+    const C = new (window.AudioContext||window.webkitAudioContext)();
+    const master = C.createGain(); master.gain.value=0.5; master.connect(C.destination);
+    const sfx = C.createGain(); sfx.gain.value=0.9; sfx.connect(master);
+    const bgm = C.createGain(); bgm.gain.value=0.22; bgm.connect(master);
+    let bgmNodes=null;
+    function tone(freq, dur=0.12, type='sine', vol=0.6){
+      const o=C.createOscillator(), g=C.createGain();
+      o.type=type; o.frequency.value=freq; g.gain.value=vol;
+      o.connect(g); g.connect(sfx); o.start(); g.gain.exponentialRampToValueAtTime(0.0001, C.currentTime+dur); o.stop(C.currentTime+dur+0.02);
+    }
+    function startBgm(){
+      if(bgmNodes) return;
+      const osc = C.createOscillator(); osc.type='sawtooth'; osc.frequency.value=55;
+      const g = C.createGain(); g.gain.value=0.02;
+      osc.connect(g).connect(bgm);
+      const lfo = C.createOscillator(); lfo.frequency.value=0.08; const lg=C.createGain(); lg.gain.value=200;
+      lfo.connect(lg).connect(osc.frequency);
+      osc.start(); lfo.start();
+      bgmNodes={osc,lfo,g};
+    }
+    function stopBgm(){ if(!bgmNodes) return; try{bgmNodes.osc.stop(); bgmNodes.lfo.stop();}catch{} bgmNodes=null;}
+    return {
+      beep: tone,
+      spawn: ()=>tone(760,0.06,'triangle',0.28),
+      orbCreate: ()=>{tone(880,0.12,'triangle',0.4); setTimeout(()=>tone(1320,0.09,'sine',0.28),60)},
+      orbBreak: ()=>tone(520,0.06,'square',0.36),
+      kill: ()=>tone(330,0.08,'sine',0.48),
+      freeze: ()=>{tone(300,0.12,'sine',0.45); setTimeout(()=>tone(200,0.2,'sine',0.3),70)},
+      explode: ()=>{tone(160,0.18,'sawtooth',0.6); setTimeout(()=>tone(90,0.12,'triangle',0.4),90)},
+      levelUp: ()=>{tone(660,0.08,'sine',0.45); setTimeout(()=>tone(990,0.08,'sine',0.45),80)},
+      gameWin: ()=>{ [523,659,784].forEach((f,i)=>setTimeout(()=>tone(f,0.12,'sine',0.6),i*120)) },
+      gameOver: ()=>{ [392,294,220].forEach((f,i)=>setTimeout(()=>tone(f,0.18,'sawtooth',0.6),i*140)) },
+      startBgm, stopBgm
+    };
+  })();
+
+  // ---------------- Game state ----------------
+  const enemies = [], projectiles = [], player = {x:W/2,y:H/2,r:12, tx:W/2, ty:H/2};
+  let running=false, lastTime=0, elapsed=0, score=0, lastSpawnAt=0, lastAwardAt=0;
+  let hiScore = +localStorage.getItem('mouse_dodge_hi')||0; hiEl.textContent=`Kỷ lục: ${hiScore}`;
+  const WAVE_LEN = 50000;
+  const TOTAL_WAVES = 10;
+  let waveIdx = 0, waveStart=0;
+  // spawn settings piecewise
+  const W1_MIN=5,W1_MAX=45,W2_MIN=15,W2_MAX=70;
+  // skill main
+  let selectedSkill=null; // 'orb'|'freeze'|'explosion'
+  let skillLevel=0; let lastSkillAt=-999999; const SKILL_CD=30000;
+  let orbs=[]; let orbInvulnerableUntil=0;
+  // XP & upgrades
+  let xp=0; const XP_PER_WAVE=50;
+  const mainCost=[50,100,200,350]; const subCost=[50,100,150,300];
+  // sub skills
+  const subSkills = {
+    shieldOrb: {name:'Khiêng thất truyền', key:'Q', cd:25000, last:-999999, level:0},
+    powerOrb: {name:'Power Orb', key:'R', cd:25000, last:-999999, level:0},
+    revive: {name:'Tái sinh', key:'—', cd:0, last:0, level:0, count:0},
+    holyFire: {name:'Lửa thiêng', key:'T', cd:25000, last:-999999, level:0}
+  };
+  // sub effects trackers
+  let shieldActiveUntil=0, fireActiveUntil=0;
+  // max concurrent
+  function maxConcurrentForWave(w){ return Math.min(18 + (w-1)*3, 120); }
+
+  // enemy definitions & behavior states
+  const ENEMY_TYPES = {
+    devil: {id:'😈', hp:1, spd:1.0, kind:'chase'},
+    angry: {id:'😡', hp:1, spd:1.5, kind:'chase'},
+    ghost: {id:'👻', hp:1, spd:2.0, kind:'chase'},
+    bot: {id:'🤖', hp:2, spd:0.8, kind:'chase'},
+    clown: {id:'🤡', hp:1, spd:1.0, kind:'clown'}, // throws ball each 5s
+    freezer: {id:'🥶', hp:1, spd:5.0, kind:'freezer'}, // on touch slows player 2s (doesn't kill)
+    dummy: {id:'🤪', hp:1, spd:2.0, kind:'dummy'}, // stands, charges if close
+    ninja: {id:'🐱‍👤', hp:1, spd:1.5, kind:'ninja'}, // throws 3 shuriken every 7s
+    alien: {id:'👽', hp:1, spd:1.5, kind:'chase'}
+  };
+
+  // boss pool
+  const BOSS_POOL = ['dragon','spider','eye'];
+
+  // spawn distribution per wave groups
+  function countForWave(w){
+    if(w<=5) return Math.round(W1_MIN + (W1_MAX - W1_MIN) * ( (w-1)/(5-1) ));
+    return Math.round(W2_MIN + (W2_MAX - W2_MIN) * ( (w-6)/(4) ));
+  }
+  function spawnWeightsForWave(w){
+    // wave 1-5: 😈30%,😡30%,👻20%,🤡15%,🥶5%
+    // wave 6-10: 😈25%,😡20%,👻20%,🤡10%,🥶10%,🤪5%,🐱‍👤5%,👽5%
+    if(w<=5) return [
+      {item:'devil', w:30},{item:'angry', w:30},{item:'ghost', w:20},{item:'clown', w:15},{item:'freezer', w:5}
+    ];
+    return [
+      {item:'devil', w:25},{item:'angry', w:20},{item:'ghost', w:20},{item:'clown', w:10},{item:'freezer', w:10},
+      {item:'dummy', w:5},{item:'ninja', w:5},{item:'alien', w:5}
+    ];
+  }
+
+  // pointer control smoothing (so slowing effect matters)
+  let pointer = {x:W/2,y:H/2};
+  function setPointer(e){ let x,y; if(e.touches){x=e.touches[0].clientX; y=e.touches[0].clientY;} else {x=e.clientX; y=e.clientY;} pointer.x=x; pointer.y=y; player.tx=x; player.ty=y; hasPointer=true; }
+  addEventListener('mousemove',setPointer); addEventListener('touchmove',setPointer); addEventListener('touchstart',setPointer);
+  let hasPointer=false;
+
+  // spawn logic
+  let spawnedThisWave=0, waveTargetCount=0, waveSpawnInterval=0;
+  function startWave(w){
+    waveIdx = w;
+    waveStart = elapsed;
+    spawnedThisWave = 0;
+    waveTargetCount = (w<=10 ? countForWave(w) : 0);
+    // clamp by max concurrent
+    waveSpawnInterval = Math.max(350, Math.min(4000, Math.round(WAVE_LEN / Math.max(1,waveTargetCount))));
+    // reset spawn timer
+    lastSpawnAt = elapsed - waveSpawnInterval;
+    waveEl.textContent = `${Math.min(w,10)}/${10}`;
+  }
+
+  function spawnEnemyAt(typeKey){
+    let tries=0;
+    while(tries<40){
+      tries++;
+      const edge = Math.floor(Math.random()*4);
+      let x=0,y=0;
+      if(edge===0){ x = Math.random()*W; y = -40; }
+      if(edge===1){ x = W+40; y = Math.random()*H; }
+      if(edge===2){ x = Math.random()*W; y = H+40; }
+      if(edge===3){ x = -40; y = Math.random()*H; }
+      let ok=true;
+      for(const e of enemies){ if(Math.hypot(x-e.x,y-e.y) < 40) { ok=false; break; } }
+      if(!ok) continue;
+      const T = ENEMY_TYPES[typeKey];
+      const ent = {x,y,emoji:T.id, r:16, hp:T.hp, baseSpd:T.spd, type:typeKey, state:'idle', lastAct:elapsed, created:elapsed};
+      // type-specific props
+      if(typeKey==='clown') ent.nextThrow = elapsed + 1000 + Math.random()*4000; // first throw soon
+      if(typeKey==='ninja') ent.nextThrow = elapsed + 4000 + Math.random()*3000;
+      if(typeKey==='dummy') ent.triggered=false;
+      enemies.push(ent); SND.spawn();
+      break;
+    }
+  }
+
+  // projectiles for various attacks (balls, shuriken, boss bullets)
+  function spawnProjectile(x,y,vx,vy, r=6, life=800, kind='generic'){
+    projectiles.push({x,y,vx,vy,r,life,created:elapsed,kind});
+  }
+
+  // ---------------- Upgrades UI between waves ----------------
+  let upgradeTimeout = null, upgradeResolve = null;
+  function showUpgradeMenu(){
+    // pause and show overlay with options; 15s countdown then auto-close
+    return new Promise((resolve)=>{
+      upgradeResolve = resolve;
+      menuCard.innerHTML = '';
+      const title = document.createElement('h1'); title.textContent = `Wave ${waveIdx} hoàn thành!`;
+      const p = document.createElement('p'); p.innerHTML = `Bạn nhận được <b>${XP_PER_WAVE} XP</b>! (Tổng: <b>${xp}</b>)<br><small class="small">Còn lại <span id="countdown">15</span>s</small>`;
+      menuCard.appendChild(document.createElement('div')).innerHTML = '<div style="font-size:48px">✨</div>';
+      menuCard.appendChild(title); menuCard.appendChild(p);
+
+      // options: upgrade main (if possible) and buy sub skill (list)
+      const grid = document.createElement('div'); grid.className='upgrade-grid';
+      // main upgrade option
+      const mainCard = document.createElement('div'); mainCard.className='up-card';
+      const nextMainLevel = Math.min(4, skillLevel+1);
+      const mainCostVal = mainCost[Math.min(skillLevel, mainCost.length-1)];
+      mainCard.innerHTML = `<strong>Nâng cấp kỹ năng chính</strong><div class="small">Hiện: Lv${skillLevel} → Lv${nextMainLevel}</div><div class="small">Giá: ${mainCostVal} XP</div>`;
+      grid.appendChild(mainCard);
+
+      // sub options (provide few choices)
+      const subChoices = ['shieldOrb','powerOrb','revive','holyFire'];
+      for(const key of subChoices){
+        const s=subSkills[key];
+        const sc = document.createElement('div'); sc.className='up-card';
+        const nextLv = s.level+1;
+        const cost = subCost[Math.min(s.level, subCost.length-1)];
+        sc.innerHTML = `<strong>${s.name}</strong><div class="small">Lv: ${s.level} → ${nextLv}</div><div class="small">Giá: ${cost} XP</div>`;
+        grid.appendChild(sc);
+        sc.addEventListener('click', ()=> {
+          if(xp < cost) return; // insufficient
+          xp -= cost; xpEl.textContent = xp;
+          s.level = Math.min(4, s.level+1);
+          if(key==='revive') { s.count = (s.count||0) + 1; }
+          // apply some immediate effects for clarity
+          if(key==='powerOrb'){ /* passive until used */ }
+          SND.levelUp();
+          closeUpgradeMenu();
+        });
+      }
+
+      // clicking mainCard
+      mainCard.addEventListener('click', ()=>{
+        if(xp < mainCostVal) return;
+        xp -= mainCostVal; xpEl.textContent = xp;
+        skillLevel = Math.min(4, skillLevel+1);
+        SND.levelUp();
+        closeUpgradeMenu();
+      });
+
+      // cancel button
+      const footer = document.createElement('div'); footer.className='center-row';
+      const contBtn = document.createElement('button'); contBtn.className='btn'; contBtn.textContent='Tiếp tục (Bỏ qua)';
+      contBtn.addEventListener('click', ()=>{ closeUpgradeMenu(); });
+      footer.appendChild(contBtn);
+
+      menuCard.appendChild(grid); menuCard.appendChild(footer);
+      overlay.classList.add('show');
+
+      // countdown
+      let sec=15; const cdSpan = menuCard.querySelector('#countdown');
+      upgradeTimeout = setInterval(()=>{ sec--; if(sec<=0){ clearInterval(upgradeTimeout); upgradeTimeout=null; closeUpgradeMenu(); } else { if(cdSpan) cdSpan.textContent = sec; } },1000);
+      // resolve when closed
+      function closeUpgradeMenu(){
+        if(upgradeTimeout){ clearInterval(upgradeTimeout); upgradeTimeout=null; }
+        overlay.classList.remove('show');
+        // restore menu card base content for next open
+        rebuildMenuCard();
+        if(upgradeResolve){ upgradeResolve(); upgradeResolve=null; }
+      }
+    });
+  }
+
+  function rebuildMenuCard(){
+    menuCard.innerHTML = `
+      <div style="font-size:48px">🖱️🏃‍♂️</div>
+      <h1>Endless Run — Full</h1>
+      <p>
+        Di chuyển chuột/ngón tay để né. Đụng là thua!<br>
+        Mỗi wave 50s — sau wave bạn nhận <b>50 XP</b> và có <b>15s</b> để nâng cấp.<br>
+        Chọn 1 kỹ năng chính (E) trước khi bắt đầu.
+      </p>
+      <div style="margin:10px 0 6px; opacity:.95">Chọn kỹ năng chính:</div>
+      <div class="skills" id="skillChoices">
+        <div class="skill-opt" data-skill="orb">🔮 Orb bảo vệ<br><small class="small">Quanh người, chạm tiêu diệt (cấp tăng số orb)</small></div>
+        <div class="skill-opt" data-skill="freeze">❄️ Đóng băng<br><small class="small">Đóng băng quái trong vài giây</small></div>
+        <div class="skill-opt" data-skill="explosion">💥 Bùng nổ<br><small class="small">Tiêu diệt nhiều quái xung quanh</small></div>
+      </div>
+      <div class="center-row">
+        <button id="startBtn" class="btn" disabled>Bắt đầu</button>
+      </div>
+      <div class="note" style="margin-top:10px">Phím: <span class="kbd">E</span> = skill chính, <span class="kbd">Q</span> / <span class="kbd">R</span> / <span class="kbd">T</span> = sub skills khi mua.</div>
+    `;
+    // re-bind choices and start button
+    document.getElementById('startBtn').addEventListener('click', ()=>{
+      SND.beep(220,0.08,'square',0.4); startGame();
+    });
+    const sc = menuCard.querySelectorAll('.skill-opt'); sc.forEach(n=>{
+      n.addEventListener('click', (ev)=>{
+        sc.forEach(x=>x.classList.remove('sel'));
+        n.classList.add('sel');
+        selectedSkill = n.dataset.skill;
+        startBtn.disabled = false;
+        SND.beep(440,0.06,'sine',0.35);
+      });
+    });
+  }
+
+  // initial menu build
+  rebuildMenuCard();
+
+  // ---------------- Skill params with levels ----------------
+  function getMainParams(){
+    if(selectedSkill==='orb'){
+      const table=[4,6,8,9,10];
+      return {count: table[Math.min(skillLevel,4)], radius: 60};
+    }
+    if(selectedSkill==='freeze'){
+      const table=[1000,2000,3000,5000,7000];
+      return {duration: table[Math.min(skillLevel,4)]};
+    }
+    if(selectedSkill==='explosion'){
+      const table=[5,7,9,11,15];
+      return {kills: table[Math.min(skillLevel,4)], radius: 140};
+    }
+    return {};
+  }
+
+  // ---------------- Skill activation ----------------
+  function activateMainSkill(){
+    if((elapsed - lastSkillAt) < SKILL_CD) return;
+    lastSkillAt = elapsed; skillStatusEl.textContent = 'Đang hồi';
+    if(selectedSkill==='orb'){
+      const p = getMainParams(); orbs = [];
+      for(let i=0;i<p.count;i++) orbs.push({angle:(i/p.count)*Math.PI*2, radius:p.radius});
+      SND.orbCreate();
+    } else if(selectedSkill==='freeze'){
+      const p = getMainParams(); frozenUntil = elapsed + p.duration;
+      SND.freeze();
+    } else if(selectedSkill==='explosion'){
+      const p = getMainParams();
+      // kill nearest p.kills within radius, else kill some closest
+      const list = enemies.map((e,i)=>({i,d:Math.hypot(e.x-player.x,e.y-player.y)})).sort((a,b)=>a.d-b.d);
+      let killed=0;
+      for(const it of list){
+        if(killed>=p.kills) break;
+        if(it.d <= p.radius){
+          enemies.splice(it.i,1); killed++;
+        }
+      }
+      if(killed>0) SND.explode(); else SND.beep(300,0.08,'sine',0.3);
+    }
+  }
+
+  // Sub skill activation (Q,R,T)
+  function activateSub(key){
+    if(key==='Q'){
+      const s=subSkills.shieldOrb; if(!s.level) return;
+      if(elapsed - s.last < s.cd) return;
+      s.last = elapsed;
+      shieldActiveUntil = elapsed + (3000 + 2000*s.level); // scale a bit
+      SND.orbCreate();
+    } else if(key==='R'){
+      const s=subSkills.powerOrb; if(!s.level) return;
+      if(elapsed - s.last < s.cd) return;
+      s.last = elapsed;
+      orbInvulnerableUntil = elapsed + (3000 + 2000*s.level);
+      SND.freeze();
+    } else if(key==='T'){
+      const s=subSkills.holyFire; if(!s.level) return;
+      if(elapsed - s.last < s.cd) return;
+      s.last = elapsed;
+      fireActiveUntil = elapsed + (3000 + 2000*s.level);
+      SND.explode();
+    }
+  }
+
+  // ---------------- Enemy behaviors update ----------------
+  let frozenUntil = 0; // for main freeze
+
+  function updateEnemies(dt){
+    // update each enemy by type
+    for(let i=enemies.length-1;i>=0;i--){
+      const e = enemies[i];
+      const dx = player.x - e.x, dy = player.y - e.y;
+      const dist = Math.hypot(dx,dy)||1;
+      // boss/external handled elsewhere; here basic behaviors
+      if(e.type==='clown'){
+        if(elapsed >= e.nextThrow){
+          // throw ball towards player
+          const vx = (player.x - e.x) / dist * 4;
+          const vy = (player.y - e.y) / dist * 4;
+          spawnProjectile(e.x, e.y, vx, vy, 8, 3000, 'ball');
+          e.nextThrow = elapsed + 4000 + Math.random()*2000;
+        }
+        // move slowly toward player like chaser
+        if(elapsed < frozenUntil) { /* frozen */ }
+        else { e.x += dx/dist * e.baseSpd * (dt/16.6); e.y += dy/dist * e.baseSpd * (dt/16.6); }
+      } else if(e.type==='ninja'){
+        if(elapsed >= e.nextThrow){
+          // throw 3 shuriken spaced
+          for(let k=0;k<3;k++){
+            setTimeout(()=> {
+              const dx2 = player.x - e.x, dy2 = player.y - e.y;
+              const d2 = Math.hypot(dx2,dy2)||1;
+              spawnProjectile(e.x, e.y, dx2/d2*6, dy2/d2*6, 5, 2000, 'shuriken');
+            }, k*150);
+          }
+          e.nextThrow = elapsed + 7000 + Math.random()*2000;
+        }
+        if(elapsed < frozenUntil) {}
+        else { e.x += dx/dist * e.baseSpd * (dt/16.6); e.y += dy/dist * e.baseSpd * (dt/16.6); }
+      } else if(e.type==='dummy'){
+        // stand idle; when player closer than trigger, dash once
+        const trigger = 120;
+        if(!e.triggered && dist < trigger){
+          e.triggered = true; e.state='dashing'; e.dashEnd = elapsed + 600; // dash duration 600ms
+          const dnorm = Math.hypot(player.x - e.x, player.y - e.y) || 1;
+          e.vx = (player.x - e.x)/dnorm * (e.baseSpd*2.5);
+          e.vy = (player.y - e.y)/dnorm * (e.baseSpd*2.5);
+        }
+        if(e.state==='dashing'){
+          e.x += e.vx * (dt/16.6); e.y += e.vy * (dt/16.6);
+          // if dash expired and didn't hit player -> self destruct
+          if(elapsed >= e.dashEnd){ enemies.splice(i,1); continue; }
+        }
+      } else if(e.type==='freezer'){
+        // high speed chaser
+        if(elapsed < frozenUntil) {}
+        else { e.x += dx/dist * e.baseSpd * (dt/16.6); e.y += dy/dist * e.baseSpd * (dt/16.6); }
+      } else { // generic chasers: devil, angry, ghost, bot, alien
+        if(elapsed < frozenUntil) {}
+        else { e.x += dx/dist * e.baseSpd * (dt/16.6); e.y += dy/dist * e.baseSpd * (dt/16.6); }
+      }
+
+      // check collision with player
+      const pd = Math.hypot(player.x - e.x, player.y - e.y);
+      if(pd <= player.r + e.r){
+        if(e.type==='freezer'){
+          // doesn't kill; slows player movement for 2s
+          player.slowUntil = elapsed + 2000;
+          // remove freezer
+          enemies.splice(i,1); SND.kill(); continue;
+        } else {
+          // normal collision -> die unless revive available
+          if(subSkills.revive.count && subSkills.revive.level>0){
+            subSkills.revive.count--; // consume one revive
+            revivesEl.textContent = subSkills.revive.count;
+            // revive: remove this enemy, reset player pos center, clear some enemies
+            enemies.splice(i,1);
+            orbs = []; projectiles.length=0;
+            player.x = W/2; player.y = H/2;
+            SND.beep(600,0.12,'sine',0.6);
+            continue;
+          } else {
+            // game over
+            SND.gameOver();
+            running=false; overlay.classList.add('show'); menuCard.innerHTML = '<h1>Game Over</h1><p>Bạn đã bị đụng quái — thử lại nhé!</p><div class="center-row"><button id="startBtn2" class="btn">Chơi lại</button></div>';
+            document.getElementById('startBtn2').addEventListener('click', ()=>{ overlay.classList.remove('show'); rebuildMenuCard(); });
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  // projectiles update
+  function updateProjectiles(dt){
+    for(let i=projectiles.length-1;i>=0;i--){
+      const p = projectiles[i];
+      p.x += p.vx * (dt/16.6); p.y += p.vy * (dt/16.6);
+      // check life
+      if(elapsed - p.created > p.life){ projectiles.splice(i,1); continue; }
+      // check collisions
+      if(p.kind === 'ball' || p.kind === 'bossBullet'){
+        // hit player => kill
+        if(Math.hypot(player.x - p.x, player.y - p.y) <= player.r + p.r){
+          // player hit -> death or revive
+          if(subSkills.revive.count && subSkills.revive.level>0){
+            subSkills.revive.count--; revivesEl.textContent = subSkills.revive.count;
+            projectiles.splice(i,1);
+            player.x=W/2; player.y=H/2; orbs=[]; enemies.length=0; SND.beep(440,0.12);
+            continue;
+          } else {
+            SND.gameOver(); running=false; overlay.classList.add('show'); menuCard.innerHTML = '<h1>Game Over</h1><p>Bạn đã bị trúng đạn!</p><div class="center-row"><button id="startBtn2" class="btn">Chơi lại</button></div>';
+            document.getElementById('startBtn2').addEventListener('click', ()=>{ overlay.classList.remove('show'); rebuildMenuCard(); });
+            return;
+          }
+        }
+      } else if(p.kind === 'shuriken' || p.kind === 'ball'){
+        // shuriken hits enemy
+        for(let j=enemies.length-1;j>=0;j--){
+          const e=enemies[j];
+          if(Math.hypot(e.x-p.x, e.y-p.y) <= e.r + p.r){
+            e.hp -= 1;
+            if(e.hp <=0){ enemies.splice(j,1); SND.kill(); }
+            projectiles.splice(i,1); break;
+          }
+        }
+      }
+    }
+  }
+
+  // spawn projectile helper
+  function spawnProjectile(x,y,vx,vy,r,life,kind){
+    projectiles.push({x,y,vx,vy,r,life,created:elapsed,kind});
+  }
+
+  // ---------------- boss logic ----------------
+  let inBoss=false, boss=null, bossPhase=0, bossStart=0;
+  function startBoss(){
+    inBoss = true; bossStart = elapsed;
+    const choice = BOSS_POOL[Math.floor(Math.random()*BOSS_POOL.length)];
+    boss = {type:choice, x:W/2, y:H/2, r:60, lastFire:elapsed, duration: (choice==='dragon'?30000:(choice==='spider'?31000:35000))};
+    // clear regular enemies/projectiles
+    enemies.length=0; projectiles.length=0;
+  }
+  function updateBoss(dt){
+    if(!boss) return;
+    // behaviors per boss
+    if(boss.type==='dragon'){
+      // every 2.5s shoot a fireball
+      if(elapsed - boss.lastFire >= 2500){
+        boss.lastFire = elapsed;
+        const dx=player.x-boss.x, dy=player.y-boss.y; const d=Math.hypot(dx,dy)||1;
+        spawnProjectile(boss.x, boss.y, dx/d*4.2, dy/d*4.2, 10, 4000, 'bossBullet');
+      }
+      // draw boss
+      ctx.font="64px system-ui, Apple Color Emoji"; ctx.textAlign='center'; ctx.fillText('🐲', boss.x, boss.y-10);
+    } else if(boss.type==='spider'){
+      if(elapsed - boss.lastFire >= 2000){
+        boss.lastFire = elapsed;
+        // shoot web that slows if hit
+        const angle = Math.random()*Math.PI*2;
+        const vx = Math.cos(angle)*3.5, vy=Math.sin(angle)*3.5;
+        spawnProjectile(boss.x, boss.y, vx, vy, 10, 3000, 'web');
+      }
+      ctx.font="64px system-ui, Apple Color Emoji"; ctx.textAlign='center'; ctx.fillText('🕷', boss.x, boss.y-10);
+    } else if(boss.type==='eye'){
+      // shows red warning line 2s before firing straight shots (2 times spaced)
+      if(!boss.nextWarn) boss.nextWarn = elapsed + 2000;
+      if(elapsed >= boss.nextWarn && !boss.firing){
+        boss.firing = true; boss.fireCount = 0;
+      }
+      if(boss.firing){
+        if(elapsed - boss.lastFire >= 300){
+          // fire burst (two quick shots per cycle)
+          boss.lastFire = elapsed;
+          const dx=player.x-boss.x, dy=player.y-boss.y; const d=Math.hypot(dx,dy)||1;
+          spawnProjectile(boss.x, boss.y, dx/d*6, dy/d*6, 8, 2000, 'bossBullet');
+          boss.fireCount++;
+          if(boss.fireCount >= 2){
+            boss.firing = false; boss.nextWarn = elapsed + 3000 + 2000; // next warn in 3s
+          }
+        }
+      }
+      // draw eye and occasional warning (red line)
+      ctx.font="64px system-ui, Apple Color Emoji"; ctx.textAlign='center'; ctx.fillText('👁‍🗨', boss.x, boss.y-10);
+      if(boss.firing){
+        ctx.strokeStyle='rgba(255,50,50,0.85)'; ctx.lineWidth=4;
+        ctx.beginPath(); ctx.moveTo(boss.x, boss.y); ctx.lineTo(player.x, player.y); ctx.stroke();
+      } else if(boss.nextWarn && boss.nextWarn - elapsed <= 2000){
+        // show warning line
+        ctx.strokeStyle='rgba(255,50,50,0.4)'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(boss.x,boss.y); ctx.lineTo(player.x,player.y); ctx.stroke();
+      }
+    }
+
+    // projectiles hitting player handled in projectile update
+    // boss time end?
+    if(elapsed - bossStart >= boss.duration){
+      // boss survived => player wins
+      inBoss=false; boss=null;
+      SND.gameWin();
+      overlay.classList.add('show'); menuCard.innerHTML = `<h1>Chiến thắng!</h1><p>Bạn đã vượt qua boss đặc biệt! Điểm: ${score}</p><div class="center-row"><button id="startBtn2" class="btn">Chơi lại</button></div>`;
+      document.getElementById('startBtn2').addEventListener('click', ()=>{ overlay.classList.remove('show'); rebuildMenuCard(); });
+      return;
+    }
+  }
+
+  // ---------------- render ----------------
+  function draw(dt){
+    ctx.clearRect(0,0,W,H);
+    // background radial
+    const grd=ctx.createRadialGradient(player.x,player.y,20,player.x,player.y,Math.max(W,H));
+    grd.addColorStop(0,'rgba(116,255,214,0.06)'); grd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=grd; ctx.fillRect(0,0,W,H);
+
+    // projectiles
+    for(const p of projectiles){
+      if(p.kind==='bossBullet' || p.kind==='ball'){
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle='rgba(255,100,80,0.95)'; ctx.fill();
+      } else if(p.kind==='shuriken'){
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle='rgba(200,200,200,0.95)'; ctx.fill();
+      } else if(p.kind==='web'){
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle='rgba(140,220,255,0.6)'; ctx.fill();
+      }
+    }
+
+    // enemies
+    for(const e of enemies){
+      ctx.font=`${enemySize}px system-ui, Apple Color Emoji`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(e.emoji, e.x, e.y);
+      if(e.hp>1){
+        ctx.beginPath(); ctx.arc(e.x,e.y,e.r+8,0,Math.PI*2); ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.stroke();
+      }
+    }
+
+    // orbs (main & shield)
+    if(orbs.length){
+      for(const o of orbs){
+        const ox = player.x + Math.cos(o.angle) * o.radius;
+        const oy = player.y + Math.sin(o.angle) * o.radius;
+        ctx.beginPath(); ctx.arc(ox,oy,8,0,Math.PI*2);
+        ctx.fillStyle = (elapsed < orbInvulnerableUntil) ? 'rgba(255,200,100,0.95)' : 'rgba(116,255,214,0.95)';
+        ctx.fill();
+      }
+    }
+
+    // shieldActive radius
+    if(elapsed < shieldActiveUntil){
+      ctx.beginPath(); ctx.arc(player.x,player.y,120,0,Math.PI*2); ctx.fillStyle='rgba(116,255,214,0.06)'; ctx.fill();
+      ctx.strokeStyle='rgba(116,255,214,0.2)'; ctx.stroke();
+    }
+
+    // fireActive show small flames on enemies that are burning
+    if(elapsed < fireActiveUntil){
+      for(const e of enemies){ ctx.font='22px ui-sans-serif'; ctx.fillText('🔥', e.x+12, e.y-18); }
+    }
+
+    // player
+    ctx.beginPath(); ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+    ctx.fillStyle='rgba(116,255,214,0.95)'; ctx.shadowColor='rgba(116,255,214,0.6)'; ctx.shadowBlur=14; ctx.fill();
+    ctx.shadowBlur=0; ctx.beginPath(); ctx.arc(player.x,player.y,3,0,Math.PI*2); ctx.fillStyle='#061016'; ctx.fill();
+
+    // HUD extra
+    // skill cooldown indicator
+    const mainCd = Math.max(0, SKILL_CD - (elapsed - lastSkillAt));
+    skillStatusEl.textContent = (mainCd<=0) ? 'Sẵn sàng' : `CD ${(mainCd/1000).toFixed(1)}s`;
+  }
+
+  // ---------------- main loop ----------------
+  let enemySpawnAccumulator=0;
+  const enemySize = 28;
+
+  function gameLoop(now){
+    if(!running) return;
+    const dt = Math.min(40, now - lastTime); lastTime = now; elapsed += dt;
+    // pointer smoothing (apply slow if needed)
+    const moveSpeed = (elapsed < player.slowUntil ? 0.08 : 0.22);
+    player.x += (pointer.x - player.x) * Math.min(1, moveSpeed * (dt/16.6));
+    player.y += (pointer.y - player.y) * Math.min(1, moveSpeed * (dt/16.6));
+
+    // wave start
+    if(waveStart===0) startWave(1);
+
+    // handle boss wave condition
+    if(waveIdx===11 && !inBoss){ startBoss(); }
+
+    // spawning: if not boss and still need spawn this wave
+    if(!inBoss && waveIdx<=10){
+      if(spawnedThisWave < waveTargetCount && (elapsed - lastSpawnAt) >= waveSpawnInterval){
+        // spawn according to weights
+        const weights = spawnWeightsForWave(waveIdx);
+        const typeKey = chooseWeighted(weights);
+        spawnEnemyAt(typeKey);
+        spawnedThisWave++; lastSpawnAt = elapsed;
+      }
+    }
+
+    // update enemies & projectiles
+    updateEnemies(dt); updateProjectiles(dt);
+    // apply orbs movement
+    if(orbs.length){
+      const sp = 0.002 * dt;
+      for(const o of orbs) o.angle += sp;
+    }
+
+    // orbs collisions with enemies (destroy enemy & orb unless invulnerable)
+    for(let i=orbs.length-1;i>=0;i--){
+      const o = orbs[i];
+      const ox = player.x + Math.cos(o.angle) * o.radius;
+      const oy = player.y + Math.sin(o.angle) * o.radius;
+      for(let j=enemies.length-1;j>=0;j--){
+        const e = enemies[j];
+        if(Math.hypot(ox-e.x, oy-e.y) <= e.r + 8){
+          e.hp -= 1;
+          if(e.hp <= 0){ enemies.splice(j,1); SND.kill(); }
+          // if powerOrb active, orb not destroyed
+          if(elapsed < orbInvulnerableUntil) {
+            // keep orb
+          } else {
+            orbs.splice(i,1); SND.orbBreak();
+          }
+          break;
+        }
+      }
+    }
+
+    // shield effect slows enemies inside radius
+    if(elapsed < shieldActiveUntil){
+      for(const e of enemies){
+        const d = Math.hypot(e.x-player.x, e.y-player.y);
+        if(d <= 120){ e.x += (e.x - player.x)/ (d||1) * 0.4; e.y += (e.y - player.y)/(d||1) * 0.4; } // push back/slows
+      }
+    }
+
+    // fireActive damages enemies inside radius
+    if(elapsed < fireActiveUntil){
+      for(let j=enemies.length-1;j>=0;j--){
+        const e = enemies[j];
+        const d = Math.hypot(e.x-player.x, e.y-player.y);
+        if(d <= 100){
+          // apply burn tick occasionally
+          if(!e._burnTick || elapsed - e._burnTick > 700){
+            e._burnTick = elapsed;
+            e.hp -= 1;
+            if(e.hp <= 0){ enemies.splice(j,1); SND.kill(); }
+          }
+        }
+      }
+    }
+
+    // wave completion check (time)
+    const waveElapsed = elapsed - waveStart;
+    if(waveIdx<=10 && waveElapsed >= WAVE_LEN){
+      // end of wave: award XP and pause for upgrade
+      xp += XP_PER_WAVE; xpEl.textContent = xp;
+      // pause game
+      running = false;
+      SND.levelUp();
+      showUpgradeMenu().then(()=> {
+        // after choice or timeout, resume next wave
+        if(waveIdx < 10){ startWave(waveIdx+1); running = true; lastTime = performance.now(); requestAnimationFrame(gameLoop); }
+        else { // finished wave 10 -> start boss wave 11
+          startWave(11); running = true; lastTime = performance.now(); requestAnimationFrame(gameLoop);
+        }
+      });
+      return;
+    }
+
+    // update boss if in boss
+    if(inBoss){ updateBoss(dt); }
+
+    // award points every 10s living
+    while(elapsed - lastAwardAt >= 10000){ score += 50; lastAwardAt += 10000; }
+
+    // update HUD
+    scoreEl.textContent = `Điểm: ${score}`;
+    timeEl.textContent = `Sống: ${(elapsed/1000).toFixed(1)}s`;
+    waveEl.textContent = (waveIdx<=10? `${waveIdx}/10`: `11 (Boss)`);
+    xpEl.textContent = xp;
+    // update subskill list in HUD
+    const subs = [];
+    for(const k in subSkills){
+      const s=subSkills[k];
+      if(s.level>0) subs.push(`${s.name} Lv${s.level}${k==='revive'?`(${s.count||0})`:''}`);
+    }
+    subListEl.textContent = subs.length? subs.join(' • '): '—';
+    revivesEl.textContent = subSkills.revive.count || 0;
+
+    // render
+    draw(dt);
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  // ---------------- Input events ----------------
+  addEventListener('keydown', (e)=>{
+    if(e.code === 'KeyE'){ activateMainSkill(); }
+    if(e.code === 'KeyQ'){ activateSub('Q'); }
+    if(e.code === 'KeyR'){ activateSub('R'); }
+    if(e.code === 'KeyT'){ activateSub('T'); }
+  });
+
+  // ---------------- Start & menu ----------------
+  startBtn.addEventListener('click', ()=>{ SND.beep(220,0.08,'square',0.4); startGame(); });
+  function startGame(){
+    // reset stats if starting fresh
+    score = 0; elapsed = 0; lastTime = performance.now(); lastSpawnAt=0; lastAwardAt=0; enemies.length=0; projectiles.length=0; orbs.length=0;
+    xp = 0; xpEl.textContent = xp; skillLevel = 0;
+    for(const k in subSkills){ subSkills[k].level = subSkills[k].level || 0; } // keep purchased subs across runs in this session
+    selectedSkill = selectedSkill || 'orb';
+    // ensure skillLevel stored? keep as 0
+    running = true; overlay.classList.remove('show'); waveIdx=0; startWave(1);
+    lastTime = performance.now();
+    SND.startBgm();
+    requestAnimationFrame(gameLoop);
+  }
+
+  // expose some helper to pick skill options in start menu (rebind)
+  document.addEventListener('click', (e)=>{
+    const el = e.target.closest('.skill-opt');
+    if(!el) return;
+    const list = menuCard.querySelectorAll('.skill-opt');
+    list.forEach(x=>x.classList.remove('sel'));
+    el.classList.add('sel');
+    selectedSkill = el.dataset.skill;
+    const sb = menuCard.querySelector('#startBtn'); if(sb) sb.disabled=false;
+  });
+
+  // rebuild menu on reload
+  function rebuildMenuCard(){
+    menuCard.innerHTML = `
+      <div style="font-size:48px">🖱️🏃‍♂️</div>
+      <h1>Endless Run — Full</h1>
+      <p>
+        Di chuyển chuột/ngón tay để né. Đụng là thua!<br>
+        Mỗi wave 50s — sau wave bạn nhận <b>50 XP</b> và có <b>15s</b> để nâng cấp.<br>
+        Chọn 1 kỹ năng chính (E) trước khi bắt đầu.
+      </p>
+      <div style="margin:10px 0 6px; opacity:.95">Chọn kỹ năng chính:</div>
+      <div class="skills" id="skillChoices">
+        <div class="skill-opt" data-skill="orb">🔮 Orb bảo vệ<br><small class="small">Quanh người, chạm tiêu diệt (cấp tăng số orb)</small></div>
+        <div class="skill-opt" data-skill="freeze">❄️ Đóng băng<br><small class="small">Đóng băng quái trong vài giây</small></div>
+        <div class="skill-opt" data-skill="explosion">💥 Bùng nổ<br><small class="small">Tiêu diệt nhiều quái xung quanh</small></div>
+      </div>
+      <div class="center-row">
+        <button id="startBtn" class="btn" disabled>Bắt đầu</button>
+      </div>
+      <div class="note" style="margin-top:10px">Phím: <span class="kbd">E</span> = skill chính, <span class="kbd">Q</span> / <span class="kbd">R</span> / <span class="kbd">T</span> = sub skills khi mua.</div>
+    `;
+    // reattach events
+    const sc = menuCard.querySelectorAll('.skill-opt');
+    sc.forEach(n=> n.addEventListener('click', ()=>{
+      sc.forEach(x=>x.classList.remove('sel')); n.classList.add('sel');
+      selectedSkill = n.dataset.skill; const sb = menuCard.querySelector('#startBtn'); if(sb) sb.disabled=false;
+    }));
+    const sbtn = menuCard.querySelector('#startBtn'); if(sbtn){ sbtn.addEventListener('click', ()=>{ startGame(); }) }
+  }
+
+  // initial menu (already built)
+})();
+</script>
+</body>
+</html>
